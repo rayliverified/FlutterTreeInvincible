@@ -356,7 +356,7 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
     stack.push(dataModel);
     while (stack.top > 0) {
       Map<String, dynamic> node = stack.pop();
-      node['checked'] = checked == 2 ? 0 : 2;
+      node['checked'] = checked == 0 ? 2 : 0;
       node[widget.config.children]?.forEach(stack.push);
     }
   }
