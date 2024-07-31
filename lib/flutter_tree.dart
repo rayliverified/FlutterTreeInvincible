@@ -1,40 +1,35 @@
-library packages;
-
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
-
 import 'flutter_tree_pro.dart';
 
+/// Enumeration for different types of data sources.
 enum DataType {
   DataList,
   DataMap,
 }
 
-/// @create at 2021/7/15 15:01
-/// @create by kevin
-/// @desc  参数类型配置
+/// Configuration class for tree structure components.
+/// Defines how tree nodes are interpreted from raw data.
 class Config {
-  ///数据类型
-
+  /// Default data type of the nodes.
   final DataType dataType;
 
-  ///父级id key
+  /// Key in data map representing parent node's ID.
   final String parentId;
 
-  ///value key
+  /// Key in data map representing the value of a node.
   final String value;
 
-  ///
+  /// Key in data map representing the label of a node.
   final String label;
 
-  ///
+  /// Key in data map representing the unique ID of a node.
   final String id;
 
-  ///
+  /// Key in data map representing child nodes.
   final String children;
 
+  /// Constructor with default values for tree configuration.
   const Config({
     this.dataType = DataType.DataMap,
     this.parentId = 'parentId',
@@ -45,45 +40,44 @@ class Config {
   });
 }
 
-var logger = Logger(
-  printer: PrettyPrinter(
-    methodCount: 0,
-  ),
+/// Logger instance for debugging.
+final Logger logger = Logger(
+  printer: PrettyPrinter(methodCount: 0),
 );
 
-/// @create at 2021/7/15 15:01
-/// @create by kevin
-/// @desc components
+/// A StatefulWidget that renders a tree structure with interactive nodes.
 class FlutterTreePro extends StatefulWidget {
-  /// source data type Map
+  /// Data for building the tree when data type is map.
   final List<Map<String, dynamic>> treeData;
 
-  ///  source data type List
+  /// Data for building the tree when data type is list.
   final List<Map<String, dynamic>> listData;
 
-  ///  initial source data type Map
+  /// Initial data for the tree when data type is map.
   final Map<String, dynamic> initialTreeData;
 
-  ///  initial source data type List
+  /// Initial data for the tree when data type is list.
   final List<Map<String, dynamic>> initialListData;
 
+  /// Callback function when a node is checked or unchecked.
   final Function(List<Map<String, dynamic>>) onChecked;
 
-  ///  Config
+  /// Configuration for node structure in the tree.
   final Config config;
 
-  /// if expanded items
+  /// Whether the tree nodes are expanded by default.
   final bool isExpanded;
 
-  /// is right to left
+  /// Whether the layout is right-to-left.
   final bool isRTL;
 
-  /// is single select
+  /// Whether only a single node can be selected at a time.
   final bool isSingleSelect;
 
-  /// initial select value
+  /// Initially selected value.
   final int initialSelectValue;
 
+  /// Constructor initializing all the properties of the tree.
   FlutterTreePro({
     Key? key,
     this.treeData = const <Map<String, dynamic>>[],
@@ -103,154 +97,104 @@ class FlutterTreePro extends StatefulWidget {
 }
 
 class _FlutterTreeProState extends State<FlutterTreePro> {
-  ///
+  /// List of source data maps for tree nodes.
   List<Map<String, dynamic>> sourceTreeMapList = [];
 
-  ///
-  bool checkedBox = false;
-
-  ///
+  /// Currently selected value for single-select mode.
   int selectValue = 0;
 
-  ///
+  /// Map for the checkbox states.
   Map<int, String> checkedMap = {
     0: '',
     1: 'partChecked',
     2: 'checked',
   };
 
-  /// @params
-  /// @desc expand map tree to map
-  Map treeMap = {};
+  /// Temporary storage for tree data to facilitate operations.
+  Map<int, Map<String, dynamic>> treeMap = {};
 
-  // 单选功能 当前选中的ID
+  /// Current selected node ID for single-select mode.
   int currentSelectId = 0;
 
   @override
-  initState() {
+  void initState() {
     super.initState();
     currentSelectId = widget.initialSelectValue;
-    // set default select
+    initializeTree();
+  }
+
+  /// Initializes the tree structure based on the initial data and configuration.
+  void initializeTree() {
     if (widget.config.dataType == DataType.DataList) {
-      final list = DataUtil.convertData(widget.listData);
-      sourceTreeMapList
-        ..clear()
-        ..addAll(list);
-      log(sourceTreeMapList.toString());
-      logger.t(sourceTreeMapList);
-      sourceTreeMapList.forEach((element) {
-        factoryTreeData(element);
-      });
+      var list = DataUtil.convertData(widget.listData);
+      sourceTreeMapList..clear()..addAll(list);
+      logger.d(sourceTreeMapList.toString());
+      sourceTreeMapList.forEach(factoryTreeData);
       widget.initialListData.forEach((element) {
         element['checked'] = 0;
       });
-      if (widget.isSingleSelect) {
-        for (var item in treeMap.values.toList()) {
-          if (item['id'] == widget.initialSelectValue) {
-            setCheckStatus(item);
-            break;
-          }
-        }
-      } else {
-        for (var item in widget.initialListData) {
-          for (var element in treeMap.values.toList()) {
-            if (item['id'] == element['id']) {
-              setCheckStatus(element);
-              break;
-            }
-          }
-          selectCheckedBox(item, initial: true);
+      setupInitialSelection();
+    } else {
+      sourceTreeMapList = widget.treeData;
+      sourceTreeMapList.forEach(factoryTreeData);
+    }
+  }
+
+  /// Setups the initial selection based on whether single-select is enabled.
+  void setupInitialSelection() {
+    if (widget.isSingleSelect) {
+      for (var item in treeMap.values.toList()) {
+        if (item['id'] == widget.initialSelectValue) {
+          setCheckStatus(item);
+          break;
         }
       }
     } else {
-      sourceTreeMapList = widget.treeData;
-      sourceTreeMapList.forEach((element) {
-        factoryTreeData(element);
-      });
+      for (var item in widget.initialListData) {
+        for (var element in treeMap.values.toList()) {
+          if (item['id'] == element['id']) {
+            setCheckStatus(element);
+            break;
+          }
+        }
+        selectCheckedBox(item, initial: true);
+      }
     }
   }
 
-  /// @params
-  /// @desc set current item checked
-  setCheckStatus(item) {
+  /// Sets the checked status of the given item and recursively for its children.
+  void setCheckStatus(Map<String, dynamic> item) {
     item['checked'] = 2;
-    if (item['children'] != null) {
-      item['children'].forEach((element) {
-        setCheckStatus(element);
-      });
-    }
+    item['children']?.forEach(setCheckStatus);
   }
 
-  /// @params
-  /// @desc expand tree data to map
-  factoryTreeData(treeModel) {
+  /// Factory method to construct the tree data map from a model.
+  void factoryTreeData(dynamic treeModel) {
     treeModel['open'] = widget.isExpanded;
     treeModel['checked'] = 0;
     treeMap.putIfAbsent(treeModel[widget.config.id], () => treeModel);
-    (treeModel[widget.config.children] ?? []).forEach((element) {
-      factoryTreeData(element);
-    });
+    treeModel[widget.config.children]?.forEach(factoryTreeData);
   }
 
-  /// @params
-  /// @desc render parent
-  buildTreeParent(sourceTreeMap) {
+  /// Builds the parent node widget for the tree.
+  Widget buildTreeParent(Map<String, dynamic> sourceTreeMap) {
     return Column(
       children: [
         GestureDetector(
           onTap: () => onOpenNode(sourceTreeMap),
           child: Container(
             width: MediaQuery.of(context).size.width,
-            padding: EdgeInsets.only(
-              left: 20,
-              top: 15,
-            ),
+            padding: EdgeInsets.only(left: 20, top: 15),
             child: Column(
               children: [
-                Row(
-                  textDirection:
-                      widget.isRTL ? TextDirection.rtl : TextDirection.ltr,
-                  children: [
-                    (sourceTreeMap[widget.config.children] ?? []).isNotEmpty
-                        ? Icon(
-                            (sourceTreeMap['open'] ?? false)
-                                ? Icons.keyboard_arrow_down_rounded
-                                : (widget.isRTL
-                                    ? Icons.keyboard_arrow_left_rounded
-                                    : Icons.keyboard_arrow_right_rounded),
-                            size: 20,
-                          )
-                        : SizedBox(
-                            width: widget.isRTL ? 30 : 0,
-                          ),
-                    SizedBox(
-                      width: 5,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        selectCheckedBox(sourceTreeMap);
-                      },
-                      child: buildCheckBoxIcon(sourceTreeMap),
-                    ),
-                    SizedBox(
-                      width: 5,
-                    ),
-                    Expanded(
-                      child: Text(
-                        textAlign:
-                            widget.isRTL ? TextAlign.end : TextAlign.start,
-                        '${sourceTreeMap[widget.config.label]}',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-                (sourceTreeMap['open'] ?? false)
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: buildTreeNode(sourceTreeMap),
-                      )
-                    : SizedBox.shrink(),
+                buildNodeRow(sourceTreeMap),
+                if (sourceTreeMap['open'] ?? false)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: buildTreeNode(sourceTreeMap),
+                  )
+                else
+                  SizedBox.shrink(),
               ],
             ),
           ),
@@ -259,84 +203,67 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
     );
   }
 
-  /// @params
-  /// @desc render item
-  buildTreeNode(Map<String, dynamic> data) {
-    return (data[widget.config.children] ?? []).map<Widget>(
-      (e) {
-        return GestureDetector(
-          onTap: () => onOpenNode(e),
-          child: Container(
-            color: Colors.white,
-            // width: MediaQuery.of(context).size.width,
-            padding: EdgeInsets.only(left: 20, top: 15),
-            child: Column(
-              textDirection: TextDirection.rtl,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  textDirection:
-                      widget.isRTL ? TextDirection.rtl : TextDirection.ltr,
-                  children: [
-                    SizedBox(
-                      width: widget.isRTL ? 20 : 0,
-                    ),
-                    (e[widget.config.children] ?? []).isNotEmpty
-                        ? Icon(
-                            (e['open'] ?? false)
-                                ? Icons.keyboard_arrow_down_rounded
-                                : (widget.isRTL
-                                    ? Icons.keyboard_arrow_left_rounded
-                                    : Icons.keyboard_arrow_right_rounded),
-                            size: 20,
-                          )
-                        : SizedBox(
-                            width: widget.isRTL ? 30 : 10,
-                          ),
-                    SizedBox(
-                      width: 5,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        selectCheckedBox(e);
-                      },
-                      child: buildCheckBoxIcon(e),
-                    ),
-                    SizedBox(
-                      width: 5,
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${e[widget.config.label]}',
-                        textAlign:
-                            widget.isRTL ? TextAlign.end : TextAlign.start,
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-                (e['open'] ?? false)
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: buildTreeNode(e),
-                      )
-                    : SizedBox.shrink(),
-              ],
-            ),
+  /// Builds a row widget for a node in the tree.
+  Widget buildNodeRow(Map<String, dynamic> node) {
+    return Row(
+      textDirection: widget.isRTL ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        if (node[widget.config.children]?.isNotEmpty ?? false)
+          Icon(
+            node['open']
+                ? Icons.keyboard_arrow_down_rounded
+                : (widget.isRTL
+                ? Icons.keyboard_arrow_left_rounded
+                : Icons.keyboard_arrow_right_rounded),
+            size: 20,
           ),
-        );
-      },
-    ).toList();
+        SizedBox(width: 5),
+        GestureDetector(
+          onTap: () => selectCheckedBox(node),
+          child: buildCheckBoxIcon(node),
+        ),
+        SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            node[widget.config.label],
+            textAlign: widget.isRTL ? TextAlign.end : TextAlign.start,
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    );
   }
 
-  /// @params
-  /// @desc render icon by checked type
+  /// Builds a list of child node widgets for a parent node.
+  List<Widget> buildTreeNode(Map<String, dynamic> data) {
+    return data[widget.config.children]?.map<Widget>((e) => GestureDetector(
+      onTap: () => onOpenNode(e),
+      child: Container(
+        color: Colors.white,
+        padding: EdgeInsets.only(left: 20, top: 15),
+        child: Column(
+          textDirection: TextDirection.rtl,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            buildNodeRow(e),
+            if (e['open'] ?? false)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: buildTreeNode(e),
+              )
+            else
+              SizedBox.shrink(),
+          ],
+        ),
+      ),
+    ))?.toList() ?? [];
+  }
+
+  /// Builds the appropriate checkbox icon for a node based on its checked state.
   Icon buildCheckBoxIcon(Map<String, dynamic> e) {
-    if (widget.isSingleSelect) {
-      return _buildSingleSelectIcon(e);
-    } else {
-      return _buildMultiSelectIcon(e);
-    }
+    return widget.isSingleSelect
+        ? _buildSingleSelectIcon(e)
+        : _buildMultiSelectIcon(e);
   }
 
   Icon _buildSingleSelectIcon(Map<String, dynamic> e) {
@@ -345,13 +272,12 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
         currentSelectId == e['id']
             ? Icons.check_box
             : Icons.check_box_outline_blank,
-        color:
-            currentSelectId == e['id'] ? Color(0X990000FF) : Color(0XFFCCCCCC),
+        color: currentSelectId == e['id'] ? Colors.blue : Colors.grey,
       );
     } else {
       return Icon(
         Icons.check_box_outline_blank,
-        color: Color(0XFFCCCCCC),
+        color: Colors.grey,
       );
     }
   }
@@ -359,47 +285,33 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
   Icon _buildMultiSelectIcon(Map<String, dynamic> e) {
     switch (e['checked'] ?? 0) {
       case 0:
-        return Icon(
-          Icons.check_box_outline_blank,
-          color: Color(0XFFCCCCCC),
-        );
+        return Icon(Icons.check_box_outline_blank, color: Colors.grey);
       case 1:
-        return Icon(
-          Icons.indeterminate_check_box,
-          color: Color(0X990000FF),
-        );
+        return Icon(Icons.indeterminate_check_box, color: Colors.blue);
       case 2:
-        return Icon(
-          Icons.check_box,
-          color: Color(0X990000FF),
-        );
+        return Icon(Icons.check_box, color: Colors.blue);
       default:
         return Icon(Icons.remove);
     }
   }
 
-  /// @params
-  /// @desc expand item if has item has children
-  onOpenNode(Map<String, dynamic> model) {
+  /// Handles node opening or closing.
+  void onOpenNode(Map<String, dynamic> model) {
     if ((model[widget.config.children] ?? []).isEmpty) return;
-    model['open'] = !model['open'];
-    setState(() {});
-  }
-
-  /// @params
-  /// @desc
-  selectNode(Map<String, dynamic> dataModel) {
     setState(() {
-      selectValue = dataModel['value']!;
+      model['open'] = !model['open'];
     });
   }
 
-  /// @params
-  /// @desc 选中帅选框
-  /// @params
-  /// @desc 选中帅选框
-  void selectCheckedBox(Map<String, dynamic> dataModel,
-      {bool initial = false}) {
+  /// Handles selection of a node.
+  void selectNode(Map<String, dynamic> dataModel) {
+    setState(() {
+      selectValue = dataModel['value'];
+    });
+  }
+
+  /// Toggles the checked state of a node and updates the UI.
+  void selectCheckedBox(Map<String, dynamic> dataModel, {bool initial = false}) {
     if (widget.isSingleSelect) {
       _handleSingleSelect(dataModel, initial);
     } else {
@@ -407,33 +319,30 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
     }
   }
 
+  /// Handles single selection logic.
   void _handleSingleSelect(Map<String, dynamic> dataModel, bool initial) {
     if (dataModel['children'] != null && dataModel['children'].isNotEmpty) {
       return;
     }
-    // 设置单选
     currentSelectId = dataModel['id'];
     if (!initial) {
       widget.onChecked([dataModel]);
     }
   }
 
+  /// Handles multi-selection logic.
   void _handleMultiSelect(Map<String, dynamic> dataModel, bool initial) {
-    int checked = dataModel['checked']!;
+    int checked = dataModel['checked'];
     _toggleCheckState(dataModel, checked);
 
-    // 更新父节点
-    if (dataModel[widget.config.parentId]! > 0) {
+    if (dataModel[widget.config.parentId] != null) {
       updateParentNode(dataModel);
     }
     setState(() {
       sourceTreeMapList = sourceTreeMapList;
     });
 
-    // 获取选中的最小条目
     List<Map<String, dynamic>> checkedItems = _getCheckedItems(initial);
-
-    // 调用 onChecked 回调函数
     if (!initial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         widget.onChecked(checkedItems);
@@ -441,22 +350,18 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
     }
   }
 
+  /// Toggles the checked state for a node and its children recursively.
   void _toggleCheckState(Map<String, dynamic> dataModel, int checked) {
-    if ((dataModel[widget.config.children] ?? []).isNotEmpty) {
-      var stack = MStack();
-      stack.push(dataModel);
-      while (stack.top > 0) {
-        Map<String, dynamic> node = stack.pop();
-        for (var item in node[widget.config.children] ?? []) {
-          stack.push(item);
-        }
-        node['checked'] = checked == 2 ? 0 : 2;
-      }
-    } else {
-      dataModel['checked'] = checked == 2 ? 0 : 2;
+    var stack = MStack();
+    stack.push(dataModel);
+    while (stack.top > 0) {
+      Map<String, dynamic> node = stack.pop();
+      node['checked'] = checked == 2 ? 0 : 2;
+      node[widget.config.children]?.forEach(stack.push);
     }
   }
 
+  /// Retrieves the list of checked items.
   List<Map<String, dynamic>> _getCheckedItems(bool initial) {
     List<Map<String, dynamic>> checkedItems = [];
     sourceTreeMapList.forEach((element) {
@@ -465,37 +370,28 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
     return checkedItems;
   }
 
-  /// @params
-  /// @desc 获取选中的条目
-  /// @params
-  /// @desc 获取选中的条目
-  List<Map<String, dynamic>> getCheckedItems(sourceTreeMap,
-      {bool initial = false}) {
+  /// Gets checked items recursively using a stack for depth-first search.
+  List<Map<String, dynamic>> getCheckedItems(Map<String, dynamic> sourceTreeMap, {bool initial = false}) {
     var stack = MStack();
     List<Map<String, dynamic>> checkedList = [];
     stack.push(sourceTreeMap);
     while (stack.top > 0) {
       var node = stack.pop();
-      for (var item in (node[widget.config.children] ?? [])) {
-        stack.push(item);
-      }
-      if (node['checked'] == 2 &&
-          (node[widget.config.children] ?? []).isEmpty) {
+      if (node['checked'] == 2 && (node[widget.config.children] ?? []).isEmpty) {
         checkedList.add(node);
       }
+      node[widget.config.children]?.forEach(stack.push);
     }
-
     return checkedList;
   }
 
-  /// @params
-  /// @desc
-  updateParentNode(Map<String, dynamic> dataModel) {
-    var par = treeMap[dataModel[widget.config.parentId]];
-    if (par == null) return;
+  /// Updates the parent node's checked state based on the state of its children.
+  void updateParentNode(Map<String, dynamic> dataModel) {
+    var parent = treeMap[dataModel[widget.config.parentId]];
+    if (parent == null) return;
     int checkLen = 0;
     bool partChecked = false;
-    for (var item in (par[widget.config.children] ?? [])) {
+    for (var item in (parent[widget.config.children] ?? [])) {
       if (item['checked'] == 2) {
         checkLen++;
       } else if (item['checked'] == 1) {
@@ -504,21 +400,16 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
       }
     }
 
-    // 如果子孩子全都是选择的， 父节点就全选
-    if (checkLen == (par[widget.config.children] ?? []).length) {
-      par['checked'] = 2;
-    } else if (partChecked ||
-        (checkLen < (par[widget.config.children] ?? []).length &&
-            checkLen > 0)) {
-      par['checked'] = 1;
+    if (checkLen == (parent[widget.config.children] ?? []).length) {
+      parent['checked'] = 2;
+    } else if (partChecked || (checkLen > 0 && checkLen < (parent[widget.config.children] ?? []).length)) {
+      parent['checked'] = 1;
     } else {
-      par['checked'] = 0;
+      parent['checked'] = 0;
     }
 
-    // 如果还有父节点 解析往上更新
-    if (treeMap[par[widget.config.parentId]] != null ||
-        treeMap[par[widget.config.parentId]] == 0) {
-      updateParentNode(par);
+    if (treeMap[parent[widget.config.parentId]] != null) {
+      updateParentNode(parent);
     }
   }
 
@@ -528,9 +419,7 @@ class _FlutterTreeProState extends State<FlutterTreePro> {
       color: Colors.white,
       child: SingleChildScrollView(
         child: Column(
-          children: sourceTreeMapList.map<Widget>((e) {
-            return buildTreeParent(e);
-          }).toList(),
+          children: sourceTreeMapList.map<Widget>((e) => buildTreeParent(e)).toList(),
         ),
       ),
     );
